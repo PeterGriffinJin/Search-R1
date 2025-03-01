@@ -148,7 +148,7 @@ You can change ```retriever_name``` and ```retriever_model``` to your interested
 
 ## Use your own search engine
 
-The main philosophy is to launch a local or remote search engine server seperately from the main RL training pipeline. 
+The main philosophy is to launch a local or remote search engine server separately from the main RL training pipeline. 
 
 The LLM can call the search engine by calling the search API (e.g., "http://127.0.0.1:8000/retrieve").
 
