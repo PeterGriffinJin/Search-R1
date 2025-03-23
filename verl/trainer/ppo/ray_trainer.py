@@ -452,6 +452,9 @@ class RayPPOTrainer(object):
             no_think_rl=self.config.algorithm.no_think_rl,
             search_url = self.config.retriever.url,
             topk = self.config.retriever.topk,
+            do_rerank=self.config.reranker.do_rerank,
+            rerank_url=self.config.reranker.url,
+            rerank_topk=self.config.reranker.topk,
         )
 
         # Agent config preparation
@@ -683,6 +686,9 @@ class RayPPOTrainer(object):
             no_think_rl=self.config.algorithm.no_think_rl,
             search_url = self.config.retriever.url,
             topk = self.config.retriever.topk,
+            do_rerank=self.config.reranker.do_rerank,
+            rerank_url=self.config.reranker.url,
+            rerank_topk=self.config.reranker.topk,
         )
 
         generation_manager = LLMGenerationManager(

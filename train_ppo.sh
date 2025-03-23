@@ -1,5 +1,6 @@
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 export DATA_DIR='data/nq_search'
+export HF_HOME=/gypsum/work1/zamani/hzeng/.cache/huggingface/
 
 WAND_PROJECT='Search-R1'
 
@@ -74,7 +75,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     +trainer.val_only=false \
     +trainer.val_before_train=true \
     trainer.default_hdfs_dir=null \
-    trainer.n_gpus_per_node=8 \
+    trainer.n_gpus_per_node=4 \
     trainer.nnodes=1 \
     trainer.save_freq=100 \
     trainer.test_freq=50 \
@@ -85,6 +86,9 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     trainer.default_hdfs_dir=null \
     trainer.default_local_dir=verl_checkpoints/$EXPERIMENT_NAME \
     max_turns=2 \
-    retriever.url="http://127.0.0.1:8000/retrieve" \
-    retriever.topk=3 \
+    retriever.url="http://10.100.20.17:8000/retrieve" \
+    retriever.topk=10 \
+    reranker.do_rerank=true \
+    reranker.url="http://10.100.20.21:6980/rerank" \
+    reranker.topk=3 \
     2>&1 | tee $EXPERIMENT_NAME.log
