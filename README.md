@@ -161,16 +161,16 @@ bash search_r1/search/build_index.sh
 ```
 You can change ```retriever_name``` and ```retriever_model``` to your interested off-the-shelf retriever.
 
-## Use your own search engine
+## Use alternative search methods
 
 The main philosophy is to launch a local or remote search engine server separately from the main RL training pipeline. 
 
-The LLM can call the search engine by calling the search API (e.g., "http://127.0.0.1:8000/retrieve").
+The LLM can call the search engine by calling the local search API (i.e., ```retriever.url="http://127.0.0.1:8000/retrieve"```). You can refer to ```search_r1/search/retriever_server.py``` for an example of launching a local retriever server.
 
-You can refer to ```search_r1/search/retriever_server.py``` for an example of launching a local retriever server.
+For online search engines, enter your SerpAPI key in ```train_ppo.sh``` and specify the search engine. For example, to use Google search, set ```retriever.url="serpapi_google"```. To use Bing, change it to ```retriever.url="serpapi_bing"```, etc. Note that if your API budget is exhausted, the returned search results may be empty.
 
 ## To do
-- Support google search / bing search / brave search API and others.
+- Support google search / bing search / brave search API and others. ✔️
 - Support LoRA tuning.
 - Support supervised finetuning.
 - Support off-the-shelf rerankers.

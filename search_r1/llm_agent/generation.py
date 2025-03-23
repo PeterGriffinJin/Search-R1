@@ -14,6 +14,8 @@ from verl import DataProto
 from verl.utils.tracking import Tracking
 import shutil
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 
 @dataclass
 class GenerationConfig:
@@ -447,19 +449,38 @@ If I want to give the final answer, I should put the answer between <answer> and
         Returns:
             search results which is concatenated into a string
         """
-        results = self._batch_search(queries)['result']
-        
-        return [self._passages2string(result) for result in results]
+        results = self._batch_search(queries)
+        if 'serpapi' in self.config.search_url.lower():
+            return [self._search2string(result) for result in results]
+        else:
+            return [self._passages2string(result) for result in results]
 
     def _batch_search(self, queries):
-        
-        payload = {
-            "queries": queries,
-            "topk": self.config.topk,
-            "return_scores": True
+        if 'serpapi' in self.config.search_url.lower():
+            results = []
+            with ThreadPoolExecutor() as executor:
+                for result in executor.map(self._search_query, queries):
+                    results.append(result)
+            return results
+
+        else:  # local retriever
+            payload = {
+                "queries": queries,
+                "topk": self.config.topk,
+                "return_scores": True
+            }
+            return requests.post(
+                self.config.search_url, json=payload).json()['result']
+
+    def _search_query(self, query):
+        params = {
+            "engine": self.config.search_url.split('_')[-1],
+            "q": query,
+            "api_key": os.getenv('SERP_API_KEY'),
         }
-        
-        return requests.post(self.config.search_url, json=payload).json()
+        response = requests.get("https://serpapi.com/search", params=params)
+
+        return response.json()
 
     def _passages2string(self, retrieval_result):
         format_reference = ''
@@ -469,5 +490,27 @@ If I want to give the final answer, I should put the answer between <answer> and
             title = content.split("\n")[0]
             text = "\n".join(content.split("\n")[1:])
             format_reference += f"Doc {idx+1}(Title: {title}) {text}\n"
+
+        return format_reference
+
+    def _search2string(self, search_result):
+        format_reference = ''
+        answer_box = search_result.get('answer_box', {})
+        if answer_box:
+            title = answer_box.get('title', 'No title.')
+            snippet = answer_box.get('snippet', 'No snippet available.')
+            format_reference += f"Answer Box(Title: {title}) {snippet}\n"
+
+        organic_results = search_result.get('organic_results', [])
+        for idx, result in enumerate(organic_results[:self.config.topk]):
+            title = result.get('title', 'No title.')
+            snippet = result.get('snippet', 'No snippet available.')
+            format_reference += f"Search {idx+1}(Title: {title}) {snippet}\n"
+
+        related_results = search_result.get('related_questions', [])
+        for idx, result in enumerate(related_results[:self.config.topk]):
+            title = result.get('question', 'No title.')  # question is the title here
+            snippet = result.get('snippet', 'No snippet available.')
+            format_reference += f"Related {idx+1}(Title: {title}) {snippet}\n"
 
         return format_reference
