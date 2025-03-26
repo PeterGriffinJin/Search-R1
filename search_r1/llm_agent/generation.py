@@ -384,9 +384,6 @@ class LLMGenerationManager:
         if do_search:
             search_results = self.batch_search(search_queries)
             assert len(search_results) == sum([1 for action in cur_actions if action == 'search'])
-            
-            if do_rerank:
-                
         else:
             search_results = [''] * sum([1 for action in cur_actions if action == 'search'])
 
@@ -450,16 +447,6 @@ If I want to give the final answer, I should put the answer between <answer> and
             contents.append(content)
             
         return actions, contents
-    
-    def batch_search_and_rerank(self, queries: List[str] = None) -> str: 
-        """
-        The extension of batch_search to include reranking 
-        Args:
-            queries: list of str 
-        Returns:
-            List of str where each str is the concatenated search+rerank results
-        """
-        results = self._batch_search(queries)["result"] # list of list of dict
         
     def _batch_rerank(self, queries: List[str] = None, docs: List[List[Dict]] = None):
         """
@@ -475,9 +462,11 @@ If I want to give the final answer, I should put the answer between <answer> and
             "docs": docs,
             "topk": self.config.rerank_topk,
             "return_scores": True
-        }
+            }
         
-        return requests.post(self.config.rerank_url, json=payload).json()
+        response = requests.post(self.config.rerank_url, json=payload).json()
+        results = response['result'] 
+        return results
 
     def batch_search(self, queries: List[str] = None) -> str:
         """
@@ -489,7 +478,11 @@ If I want to give the final answer, I should put the answer between <answer> and
         """
         results = self._batch_search(queries)['result']
         
-        return [self._passages2string(result) for result in results]
+        if self.config.do_rerank:
+            results = self._batch_rerank(queries, results)
+            return [self._format_docs(result) for result in results]
+        else:
+            return [self._passages2string(result) for result in results]
 
     def _batch_search(self, queries):
         
@@ -510,4 +503,13 @@ If I want to give the final answer, I should put the answer between <answer> and
             text = "\n".join(content.split("\n")[1:])
             format_reference += f"Doc {idx+1}(Title: {title}) {text}\n"
 
+        return format_reference
+    
+    def _format_docs(self, rerank_result):
+        # Notice that the doc_item['document'] is already formated as  (Title: {title}) {text} in reranker's request
+        format_reference = '' 
+        for idx, doc_item in enumerate(rerank_result):
+            doc = doc_item['document']
+            format_reference += f"Doc {idx+1}{doc}\n"
+        
         return format_reference
