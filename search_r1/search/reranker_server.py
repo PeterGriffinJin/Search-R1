@@ -39,20 +39,23 @@ class BaseCrossEncoder:
         assert len(queries) == len(documents)
         
         pairs = []
-        for query in queries:
+        qids = []
+        for qid, query in enumerate(queries):
             for document in documents:
                 for doc_item in document:
                     doc = self._passage_to_string(doc_item)
                     pairs.append((query, doc))
+                    qids.append(qid)
                     
         scores = self._predict(pairs)
         query_to_doc_scores = defaultdict(list)
         
-        assert len(scores) == len(pairs)
+        assert len(scores) == len(pairs) == len(qids)
         for i in range(len(pairs)):
             query, doc = pairs[i]
             score = scores[i] 
-            query_to_doc_scores[query].append((doc, score))
+            qid = qids[i]
+            query_to_doc_scores[qid].append((doc, score))
             
         sorted_query_to_doc_scores = {}
         for query, doc_scores in query_to_doc_scores.items():

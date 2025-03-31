@@ -28,6 +28,7 @@ class GenerationConfig:
     
     def __post_init__(self):
         if self.do_rerank:
+            print("do rerank")
             assert self.topk >= self.rerank_topk, "topk {} should be larger than rerank_topk {}".format(self.topk, self.rerank_topk)
 
 class LLMGenerationManager:
@@ -383,7 +384,8 @@ class LLMGenerationManager:
         search_queries = [content for action, content in zip(cur_actions, contents) if action == 'search']
         if do_search:
             search_results = self.batch_search(search_queries)
-            assert len(search_results) == sum([1 for action in cur_actions if action == 'search'])
+            assert len(search_results) == sum([1 for action in cur_actions if action == 'search']), (len(search_results), sum([1 for action in cur_actions if action == 'search']),
+                                                                                                     len(search_queries))
         else:
             search_results = [''] * sum([1 for action in cur_actions if action == 'search'])
 
@@ -457,14 +459,17 @@ If I want to give the final answer, I should put the answer between <answer> and
         Returns:
             rerank results which is concatenated into a string
         """
-        payload = {
+        rerank_request = {
             "queries": queries,
-            "docs": docs,
-            "topk": self.config.rerank_topk,
+            "documents": docs,
+            "rerank_topk": self.config.rerank_topk,
             "return_scores": True
             }
         
-        response = requests.post(self.config.rerank_url, json=payload).json()
+        response = requests.post(self.config.rerank_url, json=rerank_request)
+        
+        response.raise_for_status()
+        response = response.json() 
         results = response['result'] 
         return results
 
@@ -477,7 +482,6 @@ If I want to give the final answer, I should put the answer between <answer> and
             search results which is concatenated into a string
         """
         results = self._batch_search(queries)['result']
-        
         if self.config.do_rerank:
             results = self._batch_rerank(queries, results)
             return [self._format_docs(result) for result in results]

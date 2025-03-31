@@ -1,12 +1,14 @@
 import requests
 
 # URL for your local FastAPI server
-retrieval_url = "http://10.100.20.13:8000/retrieve"
-rerank_url = "http://10.100.20.20:6980/rerank"
+retrieval_url = "http://10.100.20.17:8000/retrieve"
+rerank_url = "http://10.100.20.21:6980/rerank"
 
+
+queries = ["What is the capital of France?", "Explain neural networks."]*10
 # Example payload
 retrieval_request = {
-    "queries": ["What is the capital of France?", "Explain neural networks."],
+    "queries": queries,
     "topk": 10,
     "return_scores": True
 }
@@ -21,10 +23,10 @@ response.raise_for_status()
 retrieved_data = response.json()
 
 print("Response from retirever server:")
-print(retrieved_data)
+# print(retrieved_data)
 
 rerank_request = {
-    "queries": ["What is the capital of France?", "Explain neural networks."],
+    "queries": queries,
     "documents": retrieved_data["result"],
     "rerank_topk": 3,
     "return_scores": True
@@ -33,6 +35,8 @@ rerank_request = {
 response = requests.post(rerank_url, json=rerank_request)
 response.raise_for_status()
 rerank_data = response.json()
+response = rerank_data['result']
 print("Response from reranker server:")
-print(rerank_data)
+print(len(response))
+# print(response)
 # [ {"document": {"id": "xxx", "contents": "yyy"}, "score": "zzz"}}, {}]
