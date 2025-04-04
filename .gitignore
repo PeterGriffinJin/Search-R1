@@ -7,6 +7,8 @@
 **/*.tar.gz
 **/playground
 **/wandb
+**/verl_checkpoints
+**/sbatch_jobs
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

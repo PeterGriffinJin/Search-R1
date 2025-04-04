@@ -21,6 +21,15 @@ class GenerationConfig:
     no_think_rl: bool=False
     search_url: str = None
     topk: int = 3
+    
+    do_rerank: bool = False
+    rerank_url: str = None
+    rerank_topk: int = 3
+    
+    def __post_init__(self):
+        if self.do_rerank:
+            print("do rerank")
+            assert self.topk >= self.rerank_topk, "topk {} should be larger than rerank_topk {}".format(self.topk, self.rerank_topk)
 
 class LLMGenerationManager:
     def __init__(
@@ -350,7 +359,12 @@ class LLMGenerationManager:
         
         return final_output
 
-    def execute_predictions(self, predictions: List[str], pad_token: str, active_mask=None, do_search=True) -> List[str]:
+    def execute_predictions(self, 
+                            predictions: List[str], 
+                            pad_token: str, 
+                            active_mask=None, 
+                            do_search=True,
+                            do_rerank=False) -> List[str]:
         """
         Execute predictions across multiple environments.
         NOTE: the function is the actual `step` function in the environment
@@ -370,7 +384,8 @@ class LLMGenerationManager:
         search_queries = [content for action, content in zip(cur_actions, contents) if action == 'search']
         if do_search:
             search_results = self.batch_search(search_queries)
-            assert len(search_results) == sum([1 for action in cur_actions if action == 'search'])
+            assert len(search_results) == sum([1 for action in cur_actions if action == 'search']), (len(search_results), sum([1 for action in cur_actions if action == 'search']),
+                                                                                                     len(search_queries))
         else:
             search_results = [''] * sum([1 for action in cur_actions if action == 'search'])
 
@@ -434,6 +449,29 @@ If I want to give the final answer, I should put the answer between <answer> and
             contents.append(content)
             
         return actions, contents
+        
+    def _batch_rerank(self, queries: List[str] = None, docs: List[List[Dict]] = None):
+        """
+        Batchified rerank for queries and docs.
+        Args:
+            queries: queries to call the search engine
+            docs: list of list of dict
+        Returns:
+            rerank results which is concatenated into a string
+        """
+        rerank_request = {
+            "queries": queries,
+            "documents": docs,
+            "rerank_topk": self.config.rerank_topk,
+            "return_scores": True
+            }
+        
+        response = requests.post(self.config.rerank_url, json=rerank_request)
+        
+        response.raise_for_status()
+        response = response.json() 
+        results = response['result'] 
+        return results
 
     def batch_search(self, queries: List[str] = None) -> str:
         """
@@ -444,8 +482,11 @@ If I want to give the final answer, I should put the answer between <answer> and
             search results which is concatenated into a string
         """
         results = self._batch_search(queries)['result']
-        
-        return [self._passages2string(result) for result in results]
+        if self.config.do_rerank:
+            results = self._batch_rerank(queries, results)
+            return [self._format_docs(result) for result in results]
+        else:
+            return [self._passages2string(result) for result in results]
 
     def _batch_search(self, queries):
         
@@ -466,4 +507,13 @@ If I want to give the final answer, I should put the answer between <answer> and
             text = "\n".join(content.split("\n")[1:])
             format_reference += f"Doc {idx+1}(Title: {title}) {text}\n"
 
+        return format_reference
+    
+    def _format_docs(self, rerank_result):
+        # Notice that the doc_item['document'] is already formated as  (Title: {title}) {text} in reranker's request
+        format_reference = '' 
+        for idx, doc_item in enumerate(rerank_result):
+            doc = doc_item['document']
+            format_reference += f"Doc {idx+1}{doc}\n"
+        
         return format_reference

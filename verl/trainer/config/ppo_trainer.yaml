@@ -146,6 +146,11 @@ retriever:
   url: "http://127.0.0.1:8000/retrieve"
   topk: 3
 
+reranker:
+  do_rerank: False
+  url: "http://127.0.0.1:8000/rerank"
+  topk: 3
+
 algorithm:
   gamma: 1.0
   lam: 1.0
