@@ -24,6 +24,8 @@ export EXPERIMENT_NAME=nq-search-r1-ppo-llama3.2-3b-em
 # set -x
 export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues
 
+export SERP_API_KEY="YOUR SERP API KEY"
+
 # max_prompt_length = (config['training']['max_start_length'] + config['training']['max_response_length'] * (config['training']['max_turns'] - 1) + config['training']['max_obs_length'] * config['training']['max_turns'])
 
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
@@ -85,6 +87,6 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     trainer.default_hdfs_dir=null \
     trainer.default_local_dir=verl_checkpoints/$EXPERIMENT_NAME \
     max_turns=2 \
-    retriever.url="http://127.0.0.1:8000/retrieve" \
+    retriever.url="serpapi_google" \
     retriever.topk=3 \
     2>&1 | tee $EXPERIMENT_NAME.log
