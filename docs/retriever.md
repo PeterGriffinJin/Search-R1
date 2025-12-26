@@ -108,7 +108,7 @@ python search_r1/search/retrieval_server.py --index_path $index_file --corpus_pa
 
 We support both [Google Search API](https://developers.google.com/custom-search/v1/overview) and [SerpAPI](https://serpapi.com/). We would recommend [SerpAPI](https://serpapi.com/) since it integrates multiple online search engine APIs (including Google, Bing, Baidu, etc) and does not have a monthly quota limitation ([Google Search API](https://developers.google.com/custom-search/v1/overview) has a hard 10k monthly quota, which is not sufficient to fulfill online LLM RL training).
 
-#### SerAPI online search server
+#### SerpAPI online search server
 
 ```bash
 search_url=https://serpapi.com/search
