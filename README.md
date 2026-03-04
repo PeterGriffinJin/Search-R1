@@ -249,7 +249,7 @@ We sincerely appreciate the efforts of these teams for their contributions to op
 - [Tree-GRPO](https://arxiv.org/abs/2509.21240): Tree Search for LLM Agent Reinforcement Learning. [![[code]](https://img.shields.io/github/stars/AMAP-ML/Tree-GRPO)](https://github.com/AMAP-ML/Tree-GRPO)
 - [EviNote-RAG](https://arxiv.org/abs/2509.00877): Enhancing RAG Models via Answer-Supportive Evidence Notes. [![[code]](https://img.shields.io/github/stars/Da1yuqin/EviNoteRAG)](https://github.com/Da1yuqin/EviNoteRAG)
 - [GlobalRAG](https://arxiv.org/pdf/2510.20548v1): GlobalRAG: Enhancing Global Reasoning in Multi-hop Question Answering via Reinforcement Learning. [![[code]](https://img.shields.io/github/stars/CarnegieBin/GlobalRAG)](https://github.com/CarnegieBin/GlobalRAG)
-- [InfoReasoner](https://arxiv.org/abs/2602.00845): Optimizing Agentic Reasoning with Retrieval via Synthetic Semantic Information Gain Reward. [![[code]](https://img.shields.io/github/stars/CarnegieBin/GlobalRAG)](https://github.com/dl-m9/InfoReasoner)
+- [InfoReasoner](https://arxiv.org/abs/2602.00845): Optimizing Agentic Reasoning with Retrieval via Synthetic Semantic Information Gain Reward. [![[code]](https://img.shields.io/github/stars/dl-m9/InfoReasoner)](https://github.com/dl-m9/InfoReasoner)
 
 
 
