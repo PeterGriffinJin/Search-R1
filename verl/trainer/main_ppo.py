@@ -101,11 +101,23 @@ import ray
 import hydra
 
 
+_RAY_WORKER_ENV_VARS = {
+    'TOKENIZERS_PARALLELISM': 'true',
+    'NCCL_DEBUG': 'WARN',
+    # Limit BLAS/OpenMP thread fanout inside each Ray worker process to avoid
+    # exhausting host thread limits when many workers are alive/idle.
+    'OMP_NUM_THREADS': '1',
+    'MKL_NUM_THREADS': '1',
+    'OPENBLAS_NUM_THREADS': '1',
+    'NUMEXPR_NUM_THREADS': '1',
+}
+
+
 @hydra.main(config_path='config', config_name='ppo_trainer', version_base=None)
 def main(config):
     if not ray.is_initialized():
         # this is for local ray cluster
-        ray.init(runtime_env={'env_vars': {'TOKENIZERS_PARALLELISM': 'true', 'NCCL_DEBUG': 'WARN'}})
+        ray.init(runtime_env={'env_vars': _RAY_WORKER_ENV_VARS})
 
     ray.get(main_task.remote(config))
 
@@ -195,7 +207,10 @@ def main_task(config):
                             val_reward_fn=val_reward_fn,
                             )
     trainer.init_workers()
-    trainer.fit()
+    try:
+        trainer.fit()
+    finally:
+        trainer.shutdown()
 
 
 if __name__ == '__main__':

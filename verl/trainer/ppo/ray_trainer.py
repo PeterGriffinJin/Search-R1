@@ -18,6 +18,7 @@ This trainer supports model-agonistic model initialization with huggingface
 
 import os
 import uuid
+import logging
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
@@ -361,6 +362,7 @@ class RayPPOTrainer(object):
 
         self._create_dataloader()
         self._init_logger()
+        self._is_shutdown = False
     
     def _init_logger(self):
         from verl.utils.tracking import Tracking
@@ -850,6 +852,33 @@ class RayPPOTrainer(object):
                         pprint(f'Final validation metrics: {val_metrics}')
                         logger.log(data=val_metrics, step=self.global_steps)
                     return
+
+    def shutdown(self):
+        """Best-effort release of Ray actors/placement groups to avoid resource accumulation."""
+        if self._is_shutdown:
+            return
+        self._is_shutdown = True
+
+        try:
+            import ray
+            from ray.util.placement_group import remove_placement_group
+        except Exception as exc:
+            logging.warning(f"Unable to import Ray cleanup utilities during shutdown: {exc}")
+            return
+
+        for wg_dict in getattr(self, 'wg_dicts', []):
+            for worker in getattr(wg_dict, 'workers', []):
+                try:
+                    ray.kill(worker, no_restart=True)
+                except Exception as exc:
+                    logging.warning(f"Failed to kill Ray worker {worker}: {exc}")
+
+        for resource_pool in self.resource_pool_manager.resource_pool_dict.values():
+            for pg in (resource_pool.pgs or []):
+                try:
+                    remove_placement_group(pg)
+                except Exception as exc:
+                    logging.warning(f"Failed to remove placement group {pg}: {exc}")
     
     def _create_loss_mask(self, batch, metrics):
         """Create loss mask for state tokens."""
