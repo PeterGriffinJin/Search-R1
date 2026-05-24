@@ -11,8 +11,8 @@ For local retrievers, we use [wiki-18](https://huggingface.co/datasets/PeterJinG
     - If there is no high quality embedding-based retrievers (dense retrievers) in your domain, choose **sparse local retriever** (e.g., BM25).
 
     - Otherwise choose **dense local retriever**.
-    
-        - If you do not have sufficent GPUs to conduct exact dense embedding matching, choose **ANN indexing** on CPUs.
+
+        - If you do not have sufficient GPUs to conduct exact dense embedding matching, choose **ANN indexing** on CPUs.
 
         - If you have sufficient GPUs, choose **flat indexing** on GPUs.
 
@@ -125,4 +125,3 @@ cse_id="" # put your google cse API key here (https://developers.google.com/cust
 
 python search_r1/search/google_search_server.py --api_key $api_key --topk 5 --cse_id $cse_id --snippet_only
 ```
-
