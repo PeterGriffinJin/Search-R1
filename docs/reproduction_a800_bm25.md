@@ -176,3 +176,6 @@ Four-GPU smoke:
 https://swanlab.cn/@nileonx/search-r1/runs/cegy07pb
 
 The 300-step run URL and final metric summary are appended after completion.
+
+Active two-GPU 300-step run:
+https://swanlab.cn/@nileonx/search-r1/runs/7lxgmkuc

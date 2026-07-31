@@ -73,6 +73,14 @@ EXPERIMENT_PRESET=a800_2gpu_overnight \
   scripts/local_4xa800/run_experiment.sh
 ```
 
+For an overnight job, start the preset in a detached `tmux` session:
+
+```bash
+tmux new-session -d -s search-r1-overnight -c "$PWD" \
+  'exec bash -lc "EXPERIMENT_PRESET=a800_2gpu_overnight scripts/local_4xa800/run_experiment.sh"'
+tmux attach -t search-r1-overnight
+```
+
 On a server with different mount points:
 
 ```bash
