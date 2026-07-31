@@ -41,6 +41,7 @@ dependencies = [
     "tensordict",
     "transformers<4.48",
     "vllm<=0.6.3",
+    "swanlab==0.9.2",
 ]
 
 # Optional dependencies (extras_require in setup.py)

@@ -1,0 +1,16 @@
+.git
+.github
+.cursor
+**/__pycache__
+**/*.pyc
+**/*.log
+**/outputs
+**/checkpoints
+**/wandb
+**/swanlab
+.secrets
+data
+downloads
+dist
+build
+*.egg-info

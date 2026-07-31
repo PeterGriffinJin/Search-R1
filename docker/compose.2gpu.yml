@@ -1,0 +1,12 @@
+services:
+  train:
+    environment:
+      CUDA_VISIBLE_DEVICES: "0,1"
+      EXPERIMENT_PRESET: a800_2gpu_overnight
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0", "1"]
+              capabilities: [gpu]

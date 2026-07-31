@@ -1,0 +1,12 @@
+services:
+  train:
+    environment:
+      CUDA_VISIBLE_DEVICES: "0,1,2,3"
+      EXPERIMENT_PRESET: a800_4gpu_smoke
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0", "1", "2", "3"]
+              capabilities: [gpu]

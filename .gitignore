@@ -120,3 +120,14 @@ tests/e2e/toy_examples/deepspeed/synchronous/output.txt
 log/
 
 **logs
+
+# Search-R1 local reproduction runtime and secrets
+.secrets/
+.swanlab/
+swanlab/
+*.offsets.u64
+*.offsets.u64.tmp
+*.incomplete
+*.tmp
+ray/
+outputs/

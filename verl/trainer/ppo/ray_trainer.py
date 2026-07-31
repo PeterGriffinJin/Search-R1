@@ -842,13 +842,13 @@ class RayPPOTrainer(object):
 
                 self.global_steps += 1
 
-                if self.global_steps >= self.total_training_steps:
+                if self.global_steps > self.total_training_steps:
 
                     # perform validation after training
                     if self.val_reward_fn is not None:
                         val_metrics = self._validate()
                         pprint(f'Final validation metrics: {val_metrics}')
-                        logger.log(data=val_metrics, step=self.global_steps)
+                        logger.log(data=val_metrics, step=self.total_training_steps)
                     return
     
     def _create_loss_mask(self, batch, metrics):

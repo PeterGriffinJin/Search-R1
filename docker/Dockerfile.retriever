@@ -1,0 +1,41 @@
+FROM eclipse-temurin:21-jre-jammy
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG MINICONDA_VERSION=py310_25.5.1-0
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      bash build-essential ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL \
+      "https://repo.anaconda.com/miniconda/Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh" \
+      -o /tmp/miniconda.sh \
+    && bash /tmp/miniconda.sh -b -p /opt/conda \
+    && rm /tmp/miniconda.sh
+
+ENV PATH=/opt/conda/bin:$PATH \
+    PIP_NO_CACHE_DIR=1 \
+    SEARCH_R1_REPO=/workspace/Search-R1 \
+    RETRIEVER_ENV=/opt/conda \
+    SEARCH_R1_ROOT=/data/search-r1-run \
+    SEARCH_R1_RUNTIME_ROOT=/runtime \
+    OPENAI_API_KEY=unused-for-local-bm25 \
+    BM25_HOST=0.0.0.0
+
+WORKDIR /workspace/Search-R1
+COPY constraints/retriever.txt constraints/retriever.txt
+
+RUN python -m pip install \
+      -c constraints/retriever.txt torch==2.4.0 \
+      --index-url https://download.pytorch.org/whl/cpu \
+    && python -m pip install -c constraints/retriever.txt \
+      Cython numpy pandas pyjnius scikit-learn scipy tqdm pyyaml requests \
+      fastapi uvicorn transformers sentencepiece pillow onnxruntime openai \
+      tiktoken flask \
+    && python -m pip install \
+      -c constraints/retriever.txt pyserini --no-deps
+
+COPY . .
+
+ENTRYPOINT ["/workspace/Search-R1/docker/entrypoint-retriever.sh"]
+CMD ["scripts/local_4xa800/launch_bm25.sh"]

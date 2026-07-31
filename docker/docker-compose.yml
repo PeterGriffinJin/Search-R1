@@ -1,0 +1,65 @@
+services:
+  retriever:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.retriever
+    image: search-r1-retriever:pyserini-0.44.0
+    environment:
+      SEARCH_R1_ROOT: /data/search-r1-run
+      SEARCH_R1_RUNTIME_ROOT: /runtime
+      BM25_HOST: 0.0.0.0
+      BM25_PORT: "8000"
+    volumes:
+      - type: bind
+        source: ${SEARCH_R1_ROOT_HOST:?Set SEARCH_R1_ROOT_HOST}
+        target: /data/search-r1-run
+      - type: bind
+        source: ${SEARCH_R1_RUNTIME_ROOT_HOST:?Set SEARCH_R1_RUNTIME_ROOT_HOST}
+        target: /runtime
+    ports:
+      - "${BM25_HOST_PORT:-8000}:8000"
+    shm_size: 4gb
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+    restart: unless-stopped
+
+  train:
+    profiles: ["train"]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.train
+    image: search-r1-train:cu121-vllm-0.6.3
+    ipc: host
+    environment:
+      SEARCH_R1_ROOT: /data/search-r1-run
+      SEARCH_R1_RUNTIME_ROOT: /runtime
+      RETRIEVER_URL: http://retriever:8000/retrieve
+      SWANLAB_WORKSPACE: ${SWANLAB_WORKSPACE:-nileonx}
+      SWANLAB_MODE: ${SWANLAB_MODE:-online}
+      EXPERIMENT_PRESET: ${EXPERIMENT_PRESET:-a800_2gpu_overnight}
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0,1}
+    volumes:
+      - type: bind
+        source: ${SEARCH_R1_ROOT_HOST:?Set SEARCH_R1_ROOT_HOST}
+        target: /data/search-r1-run
+      - type: bind
+        source: ${SEARCH_R1_RUNTIME_ROOT_HOST:?Set SEARCH_R1_RUNTIME_ROOT_HOST}
+        target: /runtime
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      stack:
+        soft: 67108864
+        hard: 67108864
+      nofile:
+        soft: 65535
+        hard: 65535
+    depends_on:
+      retriever:
+        condition: service_healthy
+    command: ["scripts/local_4xa800/run_experiment.sh"]

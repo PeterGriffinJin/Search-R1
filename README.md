@@ -1,260 +1,204 @@
-# Search-R1: Train your LLMs to reason and call a search engine with reinforcement learning
+# Search-R1: reproducible BM25 + GRPO training
 
-<div align="center">
-  <img src="https://raw.githubusercontent.com/PeterGriffinJin/Search-R1/main/public/logo.png" alt="logo" width="300"/>
-</div>
+This fork packages a verified Search-R1 workflow for training Qwen2.5-3B with
+GRPO and a local Wikipedia BM25 retriever. It targets shared NVIDIA servers,
+keeps persistent assets separate from host-local runtime files, records runs
+with SwanLab, and supports both native and Docker-based deployment.
 
-<p align="center">
-  <a href="https://arxiv.org/abs/2503.09516">
-    <img src="https://img.shields.io/badge/Paper1-blue?style=for-the-badge" alt="Button1"/>
-  </a>
-  <a href="https://arxiv.org/abs/2505.15117">
-    <img src="https://img.shields.io/badge/Paper2-green?style=for-the-badge" alt="Button2"/>
-  </a>
-  <a href="https://huggingface.co/collections/PeterJinGo/search-r1-67d1a021202731cb065740f5">
-    <img src="https://img.shields.io/badge/Resources-orange?style=for-the-badge" alt="Button3"/>
-  </a>
-  <a href="https://x.com/BowenJin13/status/1895544294473109889">
-    <img src="https://img.shields.io/badge/Tweet-red?style=for-the-badge" alt="Button4"/>
-  </a>
-  <a href="https://wandb.ai/peterjin/Search-R1-v0.2">
-    <img src="https://img.shields.io/badge/Logs-purple?style=for-the-badge" alt="Button5"/>
-  </a>
-</p>
+The implementation is based on
+[PeterGriffinJin/Search-R1](https://github.com/PeterGriffinJin/Search-R1).
+Please cite the original Search-R1 papers and retain the upstream license.
 
+## Verified configuration
 
-<!-- <strong>Search-R1</strong> is a reinforcement learning framework for <em>training reasoning and searching (tool-call) interleaved LLMs</em>.  -->
-<!-- We built upon [veRL](https://github.com/volcengine/verl). -->
-**Search-R1** is a reinforcement learning framework designed for training **reasoning-and-searching interleaved LLMs**—language models that learn to reason and make tool calls (e.g., to search engines) in a coordinated manner.
+- Model: `Qwen/Qwen2.5-3B` base
+- Data: `PeterJinGo/nq_hotpotqa_train`
+- Retriever: `PeterJinGo/wiki-18-bm25-index`
+- Corpus: `PeterJinGo/wiki-18-corpus`
+- Training: GRPO, FSDP CPU offload, vLLM 0.6.3
+- Hardware tested: NVIDIA A800-SXM4-40GB
+- Metrics: SwanLab project `search-r1`, workspace `nileonx`
 
-<!-- It can be seen as an extension of <strong>DeepSeek-R1(-Zero)</strong> with interleaved search engine calling and an opensource RL training-based solution for <strong>OpenAI DeepResearch</strong>. -->
-Built upon [veRL](https://github.com/volcengine/verl), Search-R1 extends the ideas of **DeepSeek-R1(-Zero)** by incorporating interleaved search engine access and provides a fully open-source RL training pipeline. It serves as an alternative and open solution to **OpenAI DeepResearch**, enabling research and development in tool-augmented LLM reasoning.
+Measured results:
 
-<!-- Through RL (rule-based outcome reward), the 3B **base** LLM (both Qwen2.5-3b-base and Llama3.2-3b-base) develops reasoning and search engine calling abilities all on its own. -->
+- 4 GPUs: stable; approximately 26.2 GB peak reserved memory per GPU.
+- 2 GPUs: stable and recommended for long jobs; approximately 25.0 GB peak
+  reserved memory per GPU.
+- 1 GPU: unsupported for this 3B configuration. Both normal and reduced-memory
+  tests OOMed while synchronizing actor weights into vLLM at about 39.4 GiB.
 
-We support different RL methods (e.g., PPO, GRPO, reinforce), different LLMs (e.g., llama3, Qwen2.5, etc) and different search engines (e.g., local sparse/dense retrievers and online search engines).
+See [the full reproduction report](docs/reproduction_a800_bm25.md) for measured
+timings, failure analysis, and experiment settings.
 
-Paper: [link1](https://arxiv.org/pdf/2503.09516), [link2](https://arxiv.org/abs/2505.15117); Model and data: [link](https://huggingface.co/collections/PeterJinGo/search-r1-67d1a021202731cb065740f5); Twitter thread: [link](https://x.com/BowenJin13/status/1895544294473109889); Full experiment log: [prelim](https://wandb.ai/peterjin/Search-R1-open); [v0.1](https://wandb.ai/peterjin/Search-R1-nq_hotpotqa_train); [v0.2](https://wandb.ai/peterjin/Search-R1-v0.2); [v0.3](https://wandb.ai/peterjin/Search-R1-v0.3). Details about these logs and methods can be find [here](https://github.com/PeterGriffinJin/Search-R1/blob/main/docs/experiment_log.md).
+## Storage model
 
+Keep large reusable assets on persistent storage and high-churn runtime files
+on local memory or SSD:
 
-![single-turn](public/main.png)
+```text
+SEARCH_R1_ROOT=/persistent/search-r1-run
+  models/ data/ indexes/ corpus/ checkpoints/ logs/ swanlab/
 
-## News
+SEARCH_R1_RUNTIME_ROOT=/dev/shm/$USER-search-r1
+  envs/ ray/ tmp/ pip-cache/ active checkpoints/ extracted corpus
+```
 
-- [2025.10] Search-R1 is featured by Thinking Machines Lab's first product [Tinker](https://github.com/thinking-machines-lab/tinker-cookbook)! Details: [Document](https://github.com/thinking-machines-lab/tinker-cookbook/tree/main/tinker_cookbook/recipes/tool_use/search).
-- [2025.7] Search-R1 is supported by [SkyRL](https://github.com/NovaSky-AI/SkyRL)! Detailed instructions: [code](https://github.com/NovaSky-AI/SkyRL/tree/main/skyrl-train/examples/search), [Document](https://novasky-ai.notion.site/skyrl-searchr1).
-- [2025.6] Search-R1 is now integrated into the latest version of veRL and can take advantage of its most up-to-date features! Detailed instructions: [veRL](https://verl.readthedocs.io/en/latest/sglang_multiturn/search_tool_example.html), [English Document](https://github.com/zhaochenyang20/Awesome-ML-SYS-Tutorial/blob/main/rlhf/verl/multi-turn/tool_examples/verl-multiturn-searchR1-like.md), [Chinese Document](https://github.com/zhaochenyang20/Awesome-ML-SYS-Tutorial/blob/main/rlhf/verl/multi-turn/tool_examples/verl-multiturn-searchR1-like_ZH.md).
-- [2025.5] The second [paper](https://arxiv.org/abs/2505.15117) conducting detailed empirical studies is published with logs: [v0.3](https://wandb.ai/peterjin/Search-R1-v0.3). 
-- [2025.4] We support [multinode](https://github.com/PeterGriffinJin/Search-R1/blob/main/docs/multinode.md) training for 30B+ LLMs!
-- [2025.4] We support [different search engines](https://github.com/PeterGriffinJin/Search-R1/blob/main/docs/retriever.md) including sparse local retriever, dense local retriever with ANN indexing and online search engines!
-- [2025.3] The first Search-R1 [paper](https://arxiv.org/pdf/2503.09516) is published with the logs: [v0.1](https://wandb.ai/peterjin/Search-R1-nq_hotpotqa_train); [v0.2](https://wandb.ai/peterjin/Search-R1-v0.2).
-- [2025.2] We opensource Search-R1 codebase with [preliminary results](https://wandb.ai/peterjin/Search-R1-open).
+Approximate downloads are 5.8 GB for the model, 2.3 GB for BM25, 426 MB for
+training data, and 5.1 GB for the compressed corpus. The extracted corpus is
+about 14.4 GB.
 
-## Links
+## Native quick start
 
-- [Installation](#installation)
-- [Quick start](#quick-start)
-- [Preliminary results](#preliminary-results)
-- [Inference](#inference)
-- [Use your own dataset](#use-your-own-dataset)
-- [Use your own search engine](#use-your-own-search-engine)
-- [Features](#features)
-- [Ackowledge](#acknowledge)
-- [Citations](#citations)
+Requirements:
 
-## Installation
+- Linux with at least 2 NVIDIA GPUs with 40 GB VRAM each
+- CUDA driver compatible with CUDA 12.1
+- Conda or Miniconda
+- OpenJDK 21
+- At least 50 GB free persistent storage
+- At least 50 GB free local `/dev/shm` for a two-GPU run
 
-### Search-r1 environment
 ```bash
-conda create -n searchr1 python=3.9
-conda activate searchr1
-# install torch [or you can skip this step and let vllm to install the correct version for you]
-pip install torch==2.4.0 --index-url https://download.pytorch.org/whl/cu121
-# install vllm
-pip3 install vllm==0.6.3 # or you can install 0.5.4, 0.4.2 and 0.3.1
+git clone https://github.com/Leonx01/Search-R1.git
+cd Search-R1
 
-# verl
-pip install -e .
+export SEARCH_R1_ROOT=/path/to/persistent/search-r1-run
+export SEARCH_R1_RUNTIME_ROOT=/dev/shm/$USER-search-r1
 
-# flash attention 2
-pip3 install flash-attn --no-build-isolation
-pip install wandb
+scripts/local_4xa800/create_envs.sh
+scripts/local_4xa800/setup_envs.sh
+scripts/local_4xa800/download_assets.sh
+CUDA_VISIBLE_DEVICES=0,1 scripts/local_4xa800/verify_envs.sh
 ```
 
-### Retriever environment (optional)
-If you would like to call a local retriever as the search engine, you can install the environment as follows. (We recommend using a seperate environment.)
+Start the retriever in one terminal:
+
 ```bash
-conda create -n retriever python=3.10
-conda activate retriever
-
-# we recommend installing torch with conda for faiss-gpu
-conda install pytorch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 pytorch-cuda=12.1 -c pytorch -c nvidia
-pip install transformers datasets pyserini
-
-## install the gpu version faiss to guarantee efficient RL rollout
-conda install -c pytorch -c nvidia faiss-gpu=1.8.0
-
-## API function
-pip install uvicorn fastapi
+export SEARCH_R1_ROOT=/path/to/persistent/search-r1-run
+export SEARCH_R1_RUNTIME_ROOT=/dev/shm/$USER-search-r1
+scripts/local_4xa800/launch_bm25.sh
 ```
 
+Configure SwanLab without placing the key in shell history:
 
-## Quick start
-
-Train a reasoning + search LLM on NQ dataset with e5 as the retriever and wikipedia as the corpus.
-
-(1) Download the indexing and corpus.
 ```bash
-save_path=/the/path/to/save
-python scripts/download.py --save_path $save_path
-cat $save_path/part_* > $save_path/e5_Flat.index
-gzip -d $save_path/wiki-18.jsonl.gz
+mkdir -p "$SEARCH_R1_ROOT/.secrets"
+chmod 700 "$SEARCH_R1_ROOT/.secrets"
+read -rsp "SwanLab API key: " key; echo
+printf '%s\n' "$key" > "$SEARCH_R1_ROOT/.secrets/swanlab_api_key"
+chmod 600 "$SEARCH_R1_ROOT/.secrets/swanlab_api_key"
+unset key
 ```
 
-(2) Process the NQ dataset.
+Run a two-GPU experiment:
+
 ```bash
-python scripts/data_process/nq_search.py
+CUDA_VISIBLE_DEVICES=0,1 \
+EXPERIMENT_PRESET=a800_2gpu_overnight \
+scripts/local_4xa800/run_experiment.sh
 ```
 
-(3) Launch a local retrieval server.
+The generic launcher also accepts environment and Hydra overrides:
+
 ```bash
-conda activate retriever
-bash retrieval_launch.sh
+CUDA_VISIBLE_DEVICES=2,3 \
+TOTAL_STEPS=60 \
+TRAIN_BATCH_SIZE=16 \
+EXPERIMENT_NAME=my-search-r1-run \
+scripts/local_4xa800/train_grpo.sh \
+actor_rollout_ref.actor.optim.lr=2e-6
 ```
 
-(4) Run RL training (PPO) with Llama-3.2-3b-base.
+`CUDA_VISIBLE_DEVICES` selects physical cards. The launcher derives the GPU
+count and applies tested defaults. It rejects one GPU by default.
+
+## Reproduced experiments
+
+Versioned presets live in
+[`configs/experiments`](configs/experiments):
+
+- `a800_4gpu_smoke.env`: five-step end-to-end validation.
+- `a800_2gpu_overnight.env`: 300-step long run, validation every 25 steps,
+  checkpoint every 100 steps.
+
+Verified four-GPU smoke run:
+[SwanLab metrics](https://swanlab.cn/@nileonx/search-r1/runs/cegy07pb).
+
+Active checkpoints are written to the runtime disk. After successful training,
+the latest actor checkpoint is copied sequentially to persistent storage to
+avoid concurrent FSDP writes stalling NFS.
+
+## SwanLab
+
+SwanLab is a first-class veRL tracking backend in this fork. Each run records:
+
+- full resolved Hydra configuration;
+- hostname, visible GPU IDs, GPU count, and git commit;
+- reward, KL, entropy, gradient norm, response length, valid-search ratio;
+- validation scores and per-stage timings.
+
+Online mode requires `SWANLAB_API_KEY` or
+`$SEARCH_R1_ROOT/.secrets/swanlab_api_key`. The key is used with
+`save=False`; it is never stored in this repository or the shared home
+directory. Set `SWANLAB_MODE=offline` for disconnected diagnostics.
+
+## Docker
+
+The repository includes separate training and retrieval images under
+[`docker/`](docker):
+
 ```bash
-conda activate searchr1
-bash train_ppo.sh
+docker compose -f docker/docker-compose.yml build
+docker compose -f docker/docker-compose.yml up -d retriever
+docker compose \
+  -f docker/docker-compose.yml \
+  -f docker/compose.2gpu.yml \
+  run --rm train
 ```
 
-## Preliminary results
+The host must provide the NVIDIA driver and NVIDIA Container Toolkit. The
+training container requires large shared memory and IPC access; the Compose
+configuration sets these explicitly. Use a unique Compose project name and
+runtime directory on shared servers.
 
-(1) The base model (llama3.2-3b-base) learns to call the search engine and obtain improved performance.
+Docker improves portability, but it does not allocate GPUs or solve NFS
+performance. Do not build images where Docker's data root is on a full system
+partition.
 
-![llama-3b](public/llama32-3b.png)
+## BM25 API
 
+The lightweight server exposes:
 
-(2) The base model (Qwen2.5-7b-base) can learn to conduct multi-turn search engine calling and reasoning with RL.
+```text
+GET  /health
+POST /retrieve
+```
 
-![multi-turn](public/multi-turn.png)
+Example:
 
-## Inference
-#### You can play with the trained Search-R1 model with your own question.
-(1) Launch a local retrieval server.
 ```bash
-conda activate retriever
-bash retrieval_launch.sh
+curl -sS http://127.0.0.1:8000/retrieve \
+  -H 'Content-Type: application/json' \
+  -d '{"queries":["Who developed relativity?"],"topk":3}'
 ```
 
-(2) Run inference.
-```bash
-conda activate searchr1
-python infer.py
-```
-You can modify the ```question``` on line 7 to something you're interested in.
+The official BM25 index stores document IDs rather than source text, so the
+corpus is required. On first startup, the server builds a compact persistent
+line-offset index for random JSONL access.
 
-## Use your own dataset
+## Troubleshooting highlights
 
-### QA data
-For each question-answer sample, it should be a dictionary containing the desired content as below:
+- Do not create Conda environments on slow NFS; use local SSD or `/dev/shm`.
+- Do not save FSDP checkpoints directly to NFS; stage locally and archive.
+- The corpus named `wiki-18.jsonl.gz` is a gzip-compressed tar archive.
+- Pyserini 0.44 imports optional encoder modules eagerly; the retriever image
+  includes the required CPU-side compatibility dependencies.
+- Use Java 21 and set `JAVA_HOME`.
+- High-concurrency Hugging Face downloads may destabilize local proxies; this
+  workflow limits workers and supports `HF_ENDPOINT`.
+- Pin NumPy and OpenCV before vLLM 0.6.3 to avoid resolver backtracking.
 
-```
-data = {
-        "data_source": data_source,
-        "prompt": [{
-            "role": "user",
-            "content": question,
-        }],
-        "ability": "fact-reasoning",
-        "reward_model": {
-            "style": "rule",
-            "ground_truth": solution
-        },
-        "extra_info": {
-            'split': split,
-            'index': idx,
-        }
-    }
-```
-
-You can refer to ```scripts/data_process/nq_search.py``` for a concrete data processing example.
-
-### Corpora
-
-It is recommended to make your corpus a jsonl file, where each line (a dictionary with "id" key and "contents" key) corresponds to one passage. You can refer to ```example/corpus.jsonl``` for an example.
-
-The "id" key corresponds to the passage id, while the "contents" key corresponds to the passage content ('"' + title + '"\n' + text).
-For example:
-```
-{"id": "0", "contents": "Evan Morris Evan L. Morris (January 26, 1977 \u2013 July 9, 2015) was a lobbyist for Genentech and its parent corporation Roche in Washington."}
-...
-{"id": "100", "contents": "Three years later, when the United States Exploring Expedition to little-known portions of the globe was organised under Charles Wilkes, Hale was recommended, while yet an undergraduate."}
-...
-```
-
-**Index your corpora (optional).**
-If you would like to use a local retriever as the search engine, you can index your own corpus by:
-```
-bash search_r1/search/build_index.sh
-```
-You can change ```retriever_name``` and ```retriever_model``` to your interested off-the-shelf retriever.
-
-## Use your own search engine
-
-Our codebase supports local sparse retriever (e.g., BM25), local dense retriever (both flat indexing with GPUs and ANN indexing with CPUs) and online search engine (e.g., Google, Bing, etc). More details can be found [here](https://github.com/PeterGriffinJin/Search-R1/tree/main/docs/retriever.md).
-
-The main philosophy is to launch a local or remote search engine server separately from the main RL training pipeline. 
-
-The LLM can call the search engine by calling the search API (e.g., "http://127.0.0.1:8000/retrieve").
-
-You can refer to ```search_r1/search/retriever_server.py``` for an example of launching a local retriever server.
-
-## Features
-- Support local sparse retrievers (e.g., BM25). ✔️
-- Support local dense retrievers (both flat indexing and ANN indexing) ✔️
-- Support google search / bing search / brave search API and others. ✔️
-- Support off-the-shelf neural rerankers. ✔️
-- Support different RL methods (e.g., PPO, GRPO, reinforce). ✔️
-- Support different LLMs (e.g., llama3, Qwen2.5, etc). ✔️
-
-## Acknowledge
-
-The concept of Search-R1 is inspired by [Deepseek-R1](https://github.com/deepseek-ai/DeepSeek-R1) and [TinyZero](https://github.com/Jiayi-Pan/TinyZero/tree/main).
-Its implementation is built upon [veRL](https://github.com/volcengine/verl) and [RAGEN](https://github.com/ZihanWang314/RAGEN/tree/main). 
-We sincerely appreciate the efforts of these teams for their contributions to open-source research and development.
-
-## Awesome work powered or inspired by Search-R1
-
-- [DeepResearcher](https://github.com/GAIR-NLP/DeepResearcher): Scaling Deep Research via Reinforcement Learning in Real-world Environments. [![[code]](https://img.shields.io/github/stars/GAIR-NLP/DeepResearcher)](https://github.com/GAIR-NLP/DeepResearcher)
-- [Multimodal-Search-R1](https://github.com/EvolvingLMMs-Lab/multimodal-search-r1): Incentivizing LMMs to Search. [![[code]](https://img.shields.io/github/stars/EvolvingLMMs-Lab/multimodal-search-r1)](https://github.com/EvolvingLMMs-Lab/multimodal-search-r1)
-- [OTC](https://arxiv.org/pdf/2504.14870): Optimal Tool Calls via Reinforcement Learning.
-- [ZeroSearch](https://github.com/Alibaba-NLP/ZeroSearch): Incentivize the Search Capability of LLMs without Searching. [![[code]](https://img.shields.io/github/stars/Alibaba-NLP/ZeroSearch)](https://github.com/Alibaba-NLP/ZeroSearch)
-- [IKEA](https://github.com/hzy312/knowledge-r1): Reinforced Internal-External Knowledge Synergistic Reasoning for Efficient Adaptive Search Agent. [![[code]](https://img.shields.io/github/stars/hzy312/knowledge-r1)](https://github.com/hzy312/knowledge-r1)
-- [Scent of Knowledge](https://arxiv.org/abs/2505.09316): Optimizing Search-Enhanced Reasoning with Information Foraging.
-- [AutoRefine](https://www.arxiv.org/pdf/2505.11277): Search and Refine During Think. [![[code]](https://img.shields.io/github/stars/syr-cn/AutoRefine)](https://github.com/syr-cn/AutoRefine)
-- [O^2-Searcher](https://arxiv.org/pdf/2505.16582): A Searching-based Agent Model for Open-Domain Open-Ended Question Answering. [![[code]](https://img.shields.io/github/stars/Acade-Mate/O2-Searcher)](https://github.com/Acade-Mate/O2-Searcher)
-- [MaskSearch](https://arxiv.org/pdf/2505.20285): A Universal Pre-Training Framework to Enhance Agentic Search Capability. [![[code]](https://img.shields.io/github/stars/Alibaba-NLP/MaskSearch)](https://github.com/Alibaba-NLP/MaskSearch)
-- [VRAG-RL](https://arxiv.org/abs/2505.22019): Vision-Perception-Based RAG for Visually Rich Information Understanding. [![[code]](https://img.shields.io/github/stars/Alibaba-NLP/VRAG)](https://github.com/Alibaba-NLP/VRAG)
-- [R1-Code-Interpreter](https://arxiv.org/abs/2505.21668): Training LLMs to Reason with Code via SFT and RL. [![[code]](https://img.shields.io/github/stars/yongchao98/R1-Code-Interpreter)](https://github.com/yongchao98/R1-Code-Interpreter)
-- [R-Search](https://arxiv.org/abs/2506.04185): Empowering LLM Reasoning with Search via Multi-Reward Reinforcement Learning. [![[code]](https://img.shields.io/github/stars/QingFei1/R-Search)](https://github.com/QingFei1/R-Search)
-- [StepSearch](https://arxiv.org/pdf/2505.15107): Igniting LLMs Search Ability via Step-Wise Proximal Policy Optimization. [![[code]](https://img.shields.io/github/stars/Zillwang/StepSearch)](https://github.com/Zillwang/StepSearch)
-- [SimpleTIR](https://simpletir.notion.site/report): Stable End-to-End Reinforcement Learning for Multi-Turn Tool-Integrated Reasoning. [![[code]](https://img.shields.io/github/stars/ltzheng/SimpleTIR)](https://github.com/ltzheng/SimpleTIR)
-- [Router-R1](https://arxiv.org/pdf/2506.09033): Teaching LLMs Multi-Round Routing and Aggregation via Reinforcement Learning. [![[code]](https://img.shields.io/github/stars/ulab-uiuc/Router-R1)](https://github.com/ulab-uiuc/Router-R1)
-- [SkyRL](https://skyrl.readthedocs.io/en/latest/): A Modular Full-stack RL Library for LLMs. [![[code]](https://img.shields.io/github/stars/NovaSky-AI/SkyRL)](https://github.com/NovaSky-AI/SkyRL)
-- [ASearcher](https://arxiv.org/abs/2508.07976): Large-Scale RL for Search Agents. [![[code]](https://img.shields.io/github/stars/inclusionAI/ASearcher)](https://github.com/inclusionAI/ASearcher)
-- [ParallelSearch](https://www.arxiv.org/abs/2508.09303): Decompose Query and Search Sub-queries in Parallel with RL. [![[code]](https://img.shields.io/github/stars/Tree-Shu-Zhao/ParallelSearch)](https://github.com/Tree-Shu-Zhao/ParallelSearch)
-- [AutoTIR](https://arxiv.org/pdf/2507.21836): Autonomous Tools Integrated Reasoning via Reinforcement Learning. [![[code]](https://img.shields.io/github/stars/weiyifan1023/AutoTIR)](https://github.com/weiyifan1023/AutoTIR)
-- [verl-tool](https://arxiv.org/pdf/2509.01055): A version of verl to support diverse tool use. [![[code]](https://img.shields.io/github/stars/TIGER-AI-Lab/verl-tool)](https://github.com/TIGER-AI-Lab/verl-tool)
-- [Tree-GRPO](https://arxiv.org/abs/2509.21240): Tree Search for LLM Agent Reinforcement Learning. [![[code]](https://img.shields.io/github/stars/AMAP-ML/Tree-GRPO)](https://github.com/AMAP-ML/Tree-GRPO)
-- [EviNote-RAG](https://arxiv.org/abs/2509.00877): Enhancing RAG Models via Answer-Supportive Evidence Notes. [![[code]](https://img.shields.io/github/stars/Da1yuqin/EviNoteRAG)](https://github.com/Da1yuqin/EviNoteRAG)
-- [GlobalRAG](https://arxiv.org/pdf/2510.20548v1): GlobalRAG: Enhancing Global Reasoning in Multi-hop Question Answering via Reinforcement Learning. [![[code]](https://img.shields.io/github/stars/CarnegieBin/GlobalRAG)](https://github.com/CarnegieBin/GlobalRAG)
-
-
-
-
-
-## Citations
+## Upstream papers
 
 ```bibtex
 @article{jin2025search,
@@ -263,9 +207,7 @@ We sincerely appreciate the efforts of these teams for their contributions to op
   journal={arXiv preprint arXiv:2503.09516},
   year={2025}
 }
-```
 
-```bibtex
 @article{jin2025empirical,
   title={An Empirical Study on Reinforcement Learning for Reasoning-Search Interleaved LLM Agents},
   author={Jin, Bowen and Yoon, Jinsung and Kargupta, Priyanka and Arik, Sercan O and Han, Jiawei},

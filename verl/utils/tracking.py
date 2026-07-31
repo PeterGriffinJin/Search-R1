@@ -15,6 +15,9 @@
 A unified tracking interface that supports logging data to different backend
 """
 import dataclasses
+import atexit
+import os
+import socket
 from enum import Enum
 from functools import partial
 from pathlib import Path
@@ -22,9 +25,17 @@ from typing import List, Union, Dict, Any
 
 
 class Tracking(object):
-    supported_backend = ['wandb', 'mlflow', 'console']
+    supported_backend = ['wandb', 'mlflow', 'swanlab', 'console']
 
     def __init__(self, project_name, experiment_name, default_backend: Union[str, List[str]] = 'console', config=None):
+        if isinstance(config, dict):
+            config.setdefault('runtime', {})
+            config['runtime'].update({
+                'hostname': socket.gethostname(),
+                'cuda_visible_devices': os.environ.get('CUDA_VISIBLE_DEVICES'),
+                'gpu_count': os.environ.get('SEARCH_R1_GPU_COUNT'),
+                'git_commit': os.environ.get('SEARCH_R1_GIT_COMMIT', 'unknown'),
+            })
         if isinstance(default_backend, str):
             default_backend = [default_backend]
         for backend in default_backend:
@@ -38,7 +49,6 @@ class Tracking(object):
 
         if 'tracking' in default_backend or 'wandb' in default_backend:
             import wandb
-            import os
             WANDB_API_KEY = os.environ.get("WANDB_API_KEY", None)
             if WANDB_API_KEY:
                 wandb.login(key=WANDB_API_KEY)
@@ -51,6 +61,28 @@ class Tracking(object):
             mlflow.log_params(_compute_mlflow_params_from_objects(config))
             self.logger['mlflow'] = _MlflowLoggingAdapter()
 
+        if 'swanlab' in default_backend:
+            import swanlab
+            api_key = os.environ.get('SWANLAB_API_KEY')
+            mode = os.environ.get('SWANLAB_MODE', 'online')
+            if mode == 'online' and not api_key:
+                raise RuntimeError(
+                    'SWANLAB_API_KEY is required when trainer.logger includes swanlab.'
+                )
+            if api_key:
+                swanlab.login(api_key=api_key, save=False)
+            swanlab.init(
+                project=project_name,
+                workspace=os.environ.get('SWANLAB_WORKSPACE', 'nileonx'),
+                name=experiment_name,
+                mode=mode,
+                log_dir=os.environ.get('SWANLAB_LOGDIR'),
+                config=config,
+            )
+            swanlab_logger = _SwanLabLoggingAdapter(swanlab)
+            atexit.register(swanlab_logger.finish)
+            self.logger['swanlab'] = swanlab_logger
+
         if 'console' in default_backend:
             from verl.utils.logger.aggregate_logger import LocalLogger
             self.console_logger = LocalLogger(print_to_console=True)
@@ -61,12 +93,33 @@ class Tracking(object):
             if backend is None or default_backend in backend:
                 logger_instance.log(data=data, step=step)
 
+    def finish(self):
+        for logger_instance in self.logger.values():
+            finish = getattr(logger_instance, 'finish', None)
+            if finish is not None:
+                finish()
+
 
 class _MlflowLoggingAdapter:
 
     def log(self, data, step):
         import mlflow
         mlflow.log_metrics(metrics=data, step=step)
+
+
+class _SwanLabLoggingAdapter:
+
+    def __init__(self, swanlab):
+        self.swanlab = swanlab
+        self.finished = False
+
+    def log(self, data, step):
+        self.swanlab.log(data=data, step=step)
+
+    def finish(self):
+        if not self.finished:
+            self.swanlab.finish()
+            self.finished = True
 
 
 def _compute_mlflow_params_from_objects(params) -> Dict[str, Any]:

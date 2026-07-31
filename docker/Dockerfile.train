@@ -1,0 +1,42 @@
+FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG MINICONDA_VERSION=py39_25.5.1-0
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      bash build-essential ca-certificates curl git ninja-build \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL \
+      "https://repo.anaconda.com/miniconda/Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh" \
+      -o /tmp/miniconda.sh \
+    && bash /tmp/miniconda.sh -b -p /opt/conda \
+    && rm /tmp/miniconda.sh
+
+ENV PATH=/opt/conda/bin:$PATH \
+    PIP_NO_CACHE_DIR=1 \
+    CUDA_HOME=/usr/local/cuda \
+    SEARCH_R1_REPO=/workspace/Search-R1 \
+    SEARCH_R1_ENV=/opt/conda \
+    SEARCH_R1_ROOT=/data/search-r1-run \
+    SEARCH_R1_RUNTIME_ROOT=/runtime \
+    RETRIEVER_URL=http://retriever:8000/retrieve
+
+WORKDIR /workspace/Search-R1
+COPY constraints/train.txt constraints/train.txt
+
+RUN python -m pip install \
+      -c constraints/train.txt torch==2.4.0 \
+      --index-url https://download.pytorch.org/whl/cu121 \
+    && python -m pip install \
+      -c constraints/train.txt numpy opencv-python-headless vllm
+
+COPY . .
+
+RUN python -m pip install \
+      -c constraints/train.txt -e . wandb swanlab \
+    && python -m pip install \
+      -c constraints/train.txt flash-attn --no-build-isolation
+
+ENTRYPOINT ["/workspace/Search-R1/docker/entrypoint-train.sh"]
+CMD ["scripts/local_4xa800/train_grpo.sh"]
