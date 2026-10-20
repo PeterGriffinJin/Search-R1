@@ -38,6 +38,7 @@ dependencies = [
     "numpy",
     "pybind11",
     "ray",
+    "requests",
     "tensordict",
     "transformers<4.48",
     "vllm<=0.6.3",

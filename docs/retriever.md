@@ -106,6 +106,30 @@ python search_r1/search/retrieval_server.py --index_path $index_file --corpus_pa
 
 ### Online Search Engine
 
+#### Parallel Search MCP (optional, no API key)
+
+Set `retriever.url=parallel` when running `python -m verl.trainer.main_ppo` to
+search the web directly with [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp).
+For example, replace the `retriever.url=http://127.0.0.1:8000/retrieve` override in
+your training or evaluation launch script with `retriever.url=parallel`. No
+separate retrieval server, downloaded corpus, account or API key is needed for
+this provider. It uses the existing Search-R1 environment and `requests`.
+
+Anonymous search uses Fast mode with service-managed settings and lower rate
+limits. Use it for small web-search experiments; large RL rollouts can exceed
+the free quota. Requests have a 10-second connect timeout and a 60-second read
+timeout. HTTP, quota and tool errors stop the rollout rather than silently
+switching sources. Queries are sent to the external service only when this
+provider is selected and the runtime permits a search action.
+
+The normal `<search>...</search>` action returns titles, source URLs and excerpts
+inside `<information>...</information>`, limited by `retriever.topk` and the
+existing observation length. Each rollout trajectory keeps its own anonymous
+conversation ID across search turns. This integration exposes search only;
+it does not add a separate page-fetch action. The default local retriever, explicit
+retrieval URLs, and `do_search=false` behavior are preserved. `infer.py` continues
+to use its configured local retrieval server.
+
 We support both [Google Search API](https://developers.google.com/custom-search/v1/overview) and [SerpAPI](https://serpapi.com/). We would recommend [SerpAPI](https://serpapi.com/) since it integrates multiple online search engine APIs (including Google, Bing, Baidu, etc) and does not have a monthly quota limitation ([Google Search API](https://developers.google.com/custom-search/v1/overview) has a hard 10k monthly quota, which is not sufficient to fulfill online LLM RL training).
 
 #### SerAPI online search server

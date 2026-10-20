@@ -9,6 +9,7 @@ from verl import DataProto
 from verl.utils.tracking import Tracking
 import shutil
 import requests
+from uuid import uuid4
 
 @dataclass
 class GenerationConfig:
@@ -219,6 +220,10 @@ class LLMGenerationManager:
 
     def run_llm_loop(self, gen_batch, initial_input_ids: torch.Tensor) -> Tuple[Dict, Dict]:
         """Run main LLM generation loop."""
+
+        # One opaque identity per trajectory, local to this rollout. Keep the
+        # original row order as the active batch shrinks across search turns.
+        search_session_ids = [str(uuid4()) for _ in range(gen_batch.batch['input_ids'].shape[0])]
         
         original_left_side = {'input_ids': initial_input_ids[:, -self.config.max_start_length:]}
         original_right_side = {'responses': initial_input_ids[:, []], 'responses_with_info_mask': initial_input_ids[:, []]}
@@ -251,7 +256,8 @@ class LLMGenerationManager:
 
             # Execute in environment and process observations
             next_obs, dones, valid_action, is_search = self.execute_predictions(
-                responses_str, self.tokenizer.pad_token, active_mask
+                responses_str, self.tokenizer.pad_token, active_mask,
+                session_ids=search_session_ids
             )
             
             curr_active_mask = torch.tensor([not done for done in dones], dtype=torch.bool)
@@ -350,7 +356,8 @@ class LLMGenerationManager:
         
         return final_output
 
-    def execute_predictions(self, predictions: List[str], pad_token: str, active_mask=None, do_search=True) -> List[str]:
+    def execute_predictions(self, predictions: List[str], pad_token: str, active_mask=None, do_search=True,
+                            session_ids=None) -> List[str]:
         """
         Execute predictions across multiple environments.
         NOTE: the function is the actual `step` function in the environment
@@ -367,12 +374,20 @@ class LLMGenerationManager:
         cur_actions, contents = self.postprocess_predictions(predictions)
         next_obs, dones, valid_action, is_search = [], [], [], []
         
-        search_queries = [content for action, content in zip(cur_actions, contents) if action == 'search']
-        if do_search:
-            search_results = self.batch_search(search_queries)
-            assert len(search_results) == sum([1 for action in cur_actions if action == 'search'])
+        search_indices = [i for i, (action, active) in enumerate(zip(cur_actions, active_mask))
+                          if action == 'search' and active]
+        search_queries = [contents[i] for i in search_indices]
+        if do_search and search_queries:
+            if self.config.search_url == 'parallel':
+                if session_ids is None or len(session_ids) != len(predictions):
+                    raise ValueError('Parallel search needs rollout conversation IDs')
+                search_results = self.batch_search(search_queries,
+                                                  session_ids=[session_ids[i] for i in search_indices])
+            else:
+                search_results = self.batch_search(search_queries)
+            assert len(search_results) == len(search_queries)
         else:
-            search_results = [''] * sum([1 for action in cur_actions if action == 'search'])
+            search_results = [''] * len(search_queries)
 
         for i, (action, active) in enumerate(zip(cur_actions, active_mask)):
             
@@ -435,7 +450,7 @@ If I want to give the final answer, I should put the answer between <answer> and
             
         return actions, contents
 
-    def batch_search(self, queries: List[str] = None) -> str:
+    def batch_search(self, queries: List[str] = None, session_ids=None) -> str:
         """
         Batchified search for queries.
         Args:
@@ -443,7 +458,11 @@ If I want to give the final answer, I should put the answer between <answer> and
         Returns:
             search results which is concatenated into a string
         """
-        results = self._batch_search(queries)['result']
+        if self.config.search_url == 'parallel':
+            from .parallel_search import batch_search
+            results = batch_search(queries, session_ids or [], self.config.topk)['result']
+        else:
+            results = self._batch_search(queries)['result']
         
         return [self._passages2string(result) for result in results]
 
