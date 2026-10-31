@@ -115,7 +115,8 @@ while True:
     generated_tokens = outputs[0][input_ids.shape[1]:]
     output_text = tokenizer.decode(generated_tokens, skip_special_tokens=True)
     
-    tmp_query = get_query(tokenizer.decode(outputs[0], skip_special_tokens=True))
+    # Only execute search requests generated in this turn, not from the prompt/history.
+    tmp_query = get_query(output_text)
     if tmp_query:
         # print(f'searching "{tmp_query}"...')
         search_results = search(tmp_query)
